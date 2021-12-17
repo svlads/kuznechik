@@ -1,10 +1,10 @@
 #![forbid(unsafe_code)]
 
 use log::*;
-use structopt::StructOpt;
 use std::fs::File;
+use structopt::StructOpt;
 
-use kuznechik::{encode, decode};
+use kuznechik::{decode, encode};
 
 #[derive(StructOpt, Debug)]
 #[structopt()]
@@ -32,7 +32,7 @@ fn main() {
         .init()
         .expect("failed to initialize logging");
 
-    if opts.encode ^ opts.decode != true {
+    if !(opts.encode ^ opts.decode) {
         panic!("You must specify exactly one decode/encode argument");
     }
 
