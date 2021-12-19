@@ -4,7 +4,7 @@ use log::*;
 use std::fs::File;
 use structopt::StructOpt;
 
-use kuznechik::{decode, encode};
+use kuznechik::encode;
 
 #[derive(StructOpt, Debug)]
 #[structopt()]
@@ -36,14 +36,7 @@ fn main() {
         panic!("You must specify exactly one decode/encode argument");
     }
 
-    let mut input = File::open(opts.input).expect("failed to open input file");
-    let mut output = File::create(opts.output).expect("failed to open output file");
-
-    let res = if opts.encode {
-        encode(input, output)
-    } else {
-        decode(input, output)
-    };
+    let res = encode();
 
     if let Err(err) = res {
         error!("{:#}", err);

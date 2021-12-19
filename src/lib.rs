@@ -212,7 +212,7 @@ fn decode_block(block: &mut [u8; 16], keys: &[[u8; 16]; 10], inv_linears: &[[[u8
     }
 }
 
-pub fn encode<R: Read, W: Write>(mut input: R, mut output: W) -> Result<()> {
+pub fn encode() -> Result<()> {
     let key: [u8; 32] = [
         0xfe, 0xdc, 0xba, 0x98, 0x76, 0x54, 0x32, 0x10, 0x01, 0x23, 0x45, 0x67, 0x89, 0xab, 0xcd,
         0xef, 0x88, 0x99, 0xaa, 0xbb, 0xcc, 0xdd, 0xee, 0xff, 0x00, 0x11, 0x22, 0x33, 0x44, 0x55,
@@ -233,32 +233,28 @@ pub fn encode<R: Read, W: Write>(mut input: R, mut output: W) -> Result<()> {
         }
     }
     let keys = generate_keys(&key, &linears);
-    // let mut text = vec![1u8; 100 * 1024 * 1024];
-    // let mut encoded = vec![1u8; 100 * 1024 * 1024];
-    //
-    // let start = Instant::now();
-    // let mut block: [u8; 16] = Default::default();
-    // for i in 0..100 * 1024 * 1024 / 16 {
-    //     block.copy_from_slice(&text[i * 16..(i + 1) * 16]);
-    //     encode_block(&mut block, &keys, &linears);
-    //     for ind in 0..16 {
-    //         encoded[16 * i + ind] = block[ind]
-    //     }
-    // }
-    // info!("{}", start.elapsed().as_secs_f32());
-    // info!("{}", encoded.last().unwrap());
+    let mut text = vec![1u8; 100 * 1024 * 1024];
+    let mut encoded = vec![1u8; 100 * 1024 * 1024];
 
-    let mut text: [u8; 16] = [
-        0x11, 0x22, 0x33, 0x44, 0x55, 0x66, 0x77, 0x00,
-        0xff, 0xee, 0xdd, 0xcc, 0xbb, 0xaa, 0x99, 0x88
-    ];
-    encode_block(&mut text, &keys, &linears);
-    info!("encoded = {:#2x?}", text);
-    decode_block(&mut text, &keys, &inv_linears);
-    info!("decoded = {:#2x?}", text);
-    Ok(())
-}
+    let start = Instant::now();
+    let mut block: [u8; 16] = Default::default();
+    for i in 0..100 * 1024 * 1024 / 16 {
+        block.copy_from_slice(&text[i * 16..(i + 1) * 16]);
+        encode_block(&mut block, &keys, &linears);
+        for ind in 0..16 {
+            encoded[16 * i + ind] = block[ind]
+        }
+    }
+    info!("{}", start.elapsed().as_secs_f32());
+    info!("{}", encoded.last().unwrap());
 
-pub fn decode<R: Read, W: Write>(input: R, mut output: W) -> Result<()> {
+    // let mut text: [u8; 16] = [
+    //     0x11, 0x22, 0x33, 0x44, 0x55, 0x66, 0x77, 0x00,
+    //     0xff, 0xee, 0xdd, 0xcc, 0xbb, 0xaa, 0x99, 0x88
+    // ];
+    // encode_block(&mut text, &keys, &linears);
+    // info!("encoded = {:#2x?}", text);
+    // decode_block(&mut text, &keys, &inv_linears);
+    // info!("decoded = {:#2x?}", text);
     Ok(())
 }
