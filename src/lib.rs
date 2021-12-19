@@ -98,10 +98,28 @@ fn simple_linear_transform(block: &mut [u8; 16], muls: &[[u8; 256]; 256]) {
     }
 }
 
+fn simple_inverse_linear_transform(block: &mut [u8; 16], muls: &[[u8; 256]; 256]) {
+    let mut cur = 0u8;
+    for i in 0..16 {
+        for first_ind in 0..16 {
+            cur ^= muls[L[first_ind] as usize][block[(first_ind + i) % 16] as usize];
+        }
+        block[i] = cur;
+        cur = 0u8;
+    }
+}
+
 fn linear_for_byte(index: usize, byte: u8, muls: &[[u8; 256]; 256]) -> [u8; 16] {
     let mut block = [0u8; 16];
     block[index] = byte;
     simple_linear_transform(&mut block, muls);
+    block
+}
+
+fn inv_linear_for_byte(index: usize, byte: u8, muls: &[[u8; 256]; 256]) -> [u8; 16] {
+    let mut block = [0u8; 16];
+    block[index] = byte;
+    simple_inverse_linear_transform(&mut block, muls);
     block
 }
 
@@ -115,15 +133,15 @@ fn linear_transform(block: &mut [u8; 16], linears: &[[[u8; 16]; 256]; 16]) {
     block[..16].clone_from_slice(&empty[..16]);
 }
 
-fn inverse_linear_transform(block: &mut [u8; 16], muls: &[[u8; 256]; 256]) {
-    let mut cur = 0u8;
+fn inverse_linear_transform(block: &mut [u8; 16], inv_linears: &[[[u8; 16]; 256]; 16]) {
+    let mut empty = [0u8; 16];
     for i in 0..16 {
         for first_ind in 0..16 {
-            cur ^= muls[L[first_ind] as usize][block[(first_ind + i) % 16] as usize];
+            // cur ^= muls[L[first_ind] as usize][block[(first_ind + i) % 16] as usize];
+            empty[first_ind] ^= inv_linears[i][block[i] as usize][first_ind];
         }
-        block[i] = cur;
-        cur = 0u8;
     }
+    block[..16].clone_from_slice(&empty[..16]);
 }
 
 fn get_round_constants(linears: &[[[u8; 16]; 256]; 16]) -> [[u8; 16]; 32] {
@@ -141,7 +159,6 @@ fn generate_keys(key: &[u8; 32], linears: &[[[u8; 16]; 256]; 16]) -> [[u8; 16]; 
     round_keys[1].copy_from_slice(&key[0..16]);
 
     let round_constants = get_round_constants(linears);
-    info!("constants = {:#2x?}", round_constants);
     for i in 1..5 {
         let mut left = round_keys[2 * (i - 1)];
         let mut right = round_keys[2 * (i - 1) + 1];
@@ -162,7 +179,6 @@ fn generate_keys(key: &[u8; 32], linears: &[[[u8; 16]; 256]; 16]) -> [[u8; 16]; 
         round_keys[i * 2] = left;
         round_keys[i * 2 + 1] = right;
     }
-    info!("keys = {:#2x?}", round_keys);
     round_keys
 }
 
@@ -181,14 +197,14 @@ fn encode_block(block: &mut [u8; 16], keys: &[[u8; 16]; 10], linears: &[[[u8; 16
     }
 }
 
-fn decode_block(block: &mut [u8; 16], keys: &[[u8; 16]; 10], muls: &[[u8; 256]; 256]) {
+fn decode_block(block: &mut [u8; 16], keys: &[[u8; 16]; 10], inv_linears: &[[[u8; 16]; 256]; 16]) {
     for (i, round_key) in keys.iter().enumerate().rev() {
         if i == 9 {
             for ind in 0..16 {
                 block[ind] ^= round_key[ind];
             }
         } else {
-            inverse_linear_transform(block, muls);
+            inverse_linear_transform(block, inv_linears);
             for ind in 0..16 {
                 block[ind] = INV_S[block[ind] as usize] ^ round_key[ind];
             }
@@ -204,6 +220,7 @@ pub fn encode<R: Read, W: Write>(mut input: R, mut output: W) -> Result<()> {
     ];
     let mut muls = [[0u8; 256]; 256];
     let mut linears = [[[0u8; 16]; 256]; 16];
+    let mut inv_linears = [[[0u8; 16]; 256]; 16];
     for i in 0u8..=255 {
         for j in 0u8..=255 {
             muls[i as usize][j as usize] = multiply(i, j);
@@ -212,32 +229,33 @@ pub fn encode<R: Read, W: Write>(mut input: R, mut output: W) -> Result<()> {
     for i in 0..16 {
         for j in 0..=255 {
             linears[i][j] = linear_for_byte(i, j as u8, &muls);
+            inv_linears[i][j] = inv_linear_for_byte(i, j as u8, &muls);
         }
     }
     let keys = generate_keys(&key, &linears);
-    let mut text = vec![1u8; 100 * 1024 * 1024];
-    let mut encoded = vec![1u8; 100 * 1024 * 1024];
+    // let mut text = vec![1u8; 100 * 1024 * 1024];
+    // let mut encoded = vec![1u8; 100 * 1024 * 1024];
+    //
+    // let start = Instant::now();
+    // let mut block: [u8; 16] = Default::default();
+    // for i in 0..100 * 1024 * 1024 / 16 {
+    //     block.copy_from_slice(&text[i * 16..(i + 1) * 16]);
+    //     encode_block(&mut block, &keys, &linears);
+    //     for ind in 0..16 {
+    //         encoded[16 * i + ind] = block[ind]
+    //     }
+    // }
+    // info!("{}", start.elapsed().as_secs_f32());
+    // info!("{}", encoded.last().unwrap());
 
-    let start = Instant::now();
-    let mut block: [u8; 16] = Default::default();
-    for i in 0..100 * 1024 * 1024 / 16 {
-        block.copy_from_slice(&text[i * 16..(i + 1) * 16]);
-        encode_block(&mut block, &keys, &linears);
-        for ind in 0..16 {
-            encoded[16 * i + ind] = block[ind]
-        }
-    }
-    info!("{}", start.elapsed().as_secs_f32());
-    info!("{}", encoded.last().unwrap());
-
-    // let mut text: [u8; 16] = [
-    //     0x11, 0x22, 0x33, 0x44, 0x55, 0x66, 0x77, 0x00,
-    //     0xff, 0xee, 0xdd, 0xcc, 0xbb, 0xaa, 0x99, 0x88
-    // ];
-    // encode_block(&mut text, &keys, &muls);
-    // info!("encoded = {:#2x?}", text);
-    // decode_block(&mut text, &keys, &muls);
-    // info!("decoded = {:#2x?}", text);
+    let mut text: [u8; 16] = [
+        0x11, 0x22, 0x33, 0x44, 0x55, 0x66, 0x77, 0x00,
+        0xff, 0xee, 0xdd, 0xcc, 0xbb, 0xaa, 0x99, 0x88
+    ];
+    encode_block(&mut text, &keys, &linears);
+    info!("encoded = {:#2x?}", text);
+    decode_block(&mut text, &keys, &inv_linears);
+    info!("decoded = {:#2x?}", text);
     Ok(())
 }
 
